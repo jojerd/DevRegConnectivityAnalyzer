@@ -168,7 +168,7 @@ function Get-USGov {
     foreach ($Endpoint in $GovEndpoints) {
 
         try {
-             # Log successful retrieval of USGov Endpoint IP's.
+            # Log successful retrieval of USGov Endpoint IP's.
             $DNS = Resolve-DnsName -Name $Endpoint | Select-Object IPAddress | Where-Object { $null -ne $_.IPAddress }
             Write-Host ""
             Write-Host "$Endpoint resolved successfully" -ForegroundColor Green
@@ -187,7 +187,7 @@ function Get-USGov {
     Write-Log -String "Checking DNS resolution for US Government Windows Hello for Business endpoints" -Name $Logname -OutHost
     foreach ($WHGEndpoint in $GovWindowsHelloEndpoints) {
         try {
-             # Log successful retrieval of USGov Windows Hello for Business endpoints.
+            # Log successful retrieval of USGov Windows Hello for Business endpoints.
             $WHGDNS = Resolve-DnsName -Name $WHGEndpoint | Select-Object IPAddress | Where-Object { $null -ne $_.IPAddress }
             Write-Host ""
             Write-Host "$Endpoint resolved successfully" -ForegroundColor Green
@@ -219,10 +219,11 @@ function Get-USGov {
     
 # Function to retrieve Commercial endpoint DNS records.
 function Get-Commercial {
+
     foreach ($Endpoint in $CommercialEndpoints) {
 
         try {
-             # Log successful retrieval of Commercial Endpoint IP's.
+            # Log successful retrieval of Commercial Endpoint IP's.
             $DNS = Resolve-DnsName -Name $Endpoint | Select-Object IPAddress | Where-Object { $null -ne $_.IPAddress }
             Write-Host ""
             Write-Host "$Endpoint resolved successfully" -ForegroundColor Green 
@@ -251,7 +252,7 @@ function Get-Commercial {
             $IPHashtable.Add($WHCEndpoint, $WHDNS.IPAddress)   
         }
         catch {
-             # Log failures and silently continue as Windows Hello for Business may not always be used in a Commercial tenant.
+            # Log failures and silently continue as Windows Hello for Business may not always be used in a Commercial tenant.
             Write-Host ""
             Write-Log -String "Unable to resolve DNS for $WHCEndpoint" -Name $Logname -OutHost
             Write-Host "Unable to resolve hostname $WHCEndpoint, check DNS to confirm it is working correctly" -ForegroundColor Red
@@ -273,7 +274,8 @@ function Get-Commercial {
 # Function to retrieve tenant details
 # Special Thanks to Rosalio Diera for the base code and idea.
 function Get-TenantInfo {
-     
+    # Temporary Array used for storing Tenant specific endpoints to add them for DNS lookup later.
+    $TempArray = @()
 
     Write-Log -String "Retrieving Tenant Information..." -Name $Logname -OutHost
     # Checking the openid-configuration to pull information from.
@@ -295,6 +297,36 @@ function Get-TenantInfo {
     Write-Log -String "Domain Authentication Type: $DomainAuth" -Name $Logname -OutHost
     Write-Log -String "Tenant IDP URL: $IDP" -Name $Logname -OutHost
     #===========================================================================================
+    # Retrieve Tenant Specific Endpoints to be included in connectivity testing.
+    Write-Log -String "Retrieving Tenant Specific endpoints to test connectivity against" -Name $Logname -OutHost
+    foreach ($Property in $TenantInfo.PSObject.Properties) {
+        $PropertyName = $Property.Name
+        $PropertValue = $Property.Value
+
+        if (($PropertyName -match "endpoint") -or ($PropertyName -match "issuer") -or ($PropertyName -match "rbac")) {
+            $TenantEndpointObjects = $PropertValue -split "/"
+            $TempArray += $TenantEndpointObjects[2]
+        } 
+    }
+    # Switch to determine which tenant to add the tenant specific endpoints to. Regex pattern used to filter hostnames from other data.
+    Write-Log -String "Adding retrieve tenant specific endpoints to pre-defined endpoints" -Name $Logname -OutHost
+    switch ($TenantCloud) {
+        "USG" {
+            $AdditionalEndpoints = $TempArray | Select-String -Pattern "^(?=.{1,255}$)[0-9A-Za-z](?:(?:[0-9A-Za-z]|-){0,61}[0-9A-Za-z])?(?:\.[0-9A-Za-z](?:(?:[0-9A-Za-z]|-){0,61}[0-9A-Za-z])?)*\.?$"
+            $GovEndpointAdd = $AdditionalEndpoints | Select-Object -Unique
+            $GovEndpoints += $GovEndpointAdd 
+        }
+        "USGov" {
+            $AdditionalEndpoints = $TempArray | Select-String -Pattern "^(?=.{1,255}$)[0-9A-Za-z](?:(?:[0-9A-Za-z]|-){0,61}[0-9A-Za-z])?(?:\.[0-9A-Za-z](?:(?:[0-9A-Za-z]|-){0,61}[0-9A-Za-z])?)*\.?$"
+            $GovEndpointAdd = $AdditionalEndpoints | Select-Object -Unique
+            $GovEndpoints += $GovEndpointAdd 
+        }
+        default {
+            $AdditionalEndpoints = $TempArray | Select-String -Pattern "^(?=.{1,255}$)[0-9A-Za-z](?:(?:[0-9A-Za-z]|-){0,61}[0-9A-Za-z])?(?:\.[0-9A-Za-z](?:(?:[0-9A-Za-z]|-){0,61}[0-9A-Za-z])?)*\.?$"
+            $ComEndpointAdd = $AdditionalEndpoints | Select-Object -Unique
+            $CommercialEndpoints += $ComEndpointAdd 
+        }
+    }
      
     # Switch to determine which function to call after tenant information has been retrieved.
     Switch ($TenantCloud) {
