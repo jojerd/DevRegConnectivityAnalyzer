@@ -312,19 +312,19 @@ function Get-TenantInfo {
     Write-Log -String "Adding retrieve tenant specific endpoints to pre-defined endpoints" -Name $Logname -OutHost
     switch ($TenantCloud) {
         "USG" {
-            $AdditionalEndpoints = $TempArray | Select-String -Pattern "^(?=.{1,255}$)[0-9A-Za-z](?:(?:[0-9A-Za-z]|-){0,61}[0-9A-Za-z])?(?:\.[0-9A-Za-z](?:(?:[0-9A-Za-z]|-){0,61}[0-9A-Za-z])?)*\.?$"
+            $AdditionalEndpoints = ($TempArray | Select-String -Pattern "^(?=.{1,255}$)[0-9A-Za-z](?:(?:[0-9A-Za-z]|-){0,61}[0-9A-Za-z])?(?:\.[0-9A-Za-z](?:(?:[0-9A-Za-z]|-){0,61}[0-9A-Za-z])?)*\.?$" ).Matches.Value
             $GovEndpointAdd = $AdditionalEndpoints | Select-Object -Unique
-            $GovEndpoints += $GovEndpointAdd 
+            $Script:GovEndpoints += $GovEndpointAdd 
         }
         "USGov" {
-            $AdditionalEndpoints = $TempArray | Select-String -Pattern "^(?=.{1,255}$)[0-9A-Za-z](?:(?:[0-9A-Za-z]|-){0,61}[0-9A-Za-z])?(?:\.[0-9A-Za-z](?:(?:[0-9A-Za-z]|-){0,61}[0-9A-Za-z])?)*\.?$"
+            $AdditionalEndpoints = ($TempArray | Select-String -Pattern "^(?=.{1,255}$)[0-9A-Za-z](?:(?:[0-9A-Za-z]|-){0,61}[0-9A-Za-z])?(?:\.[0-9A-Za-z](?:(?:[0-9A-Za-z]|-){0,61}[0-9A-Za-z])?)*\.?$" ).Matches.Value
             $GovEndpointAdd = $AdditionalEndpoints | Select-Object -Unique
-            $GovEndpoints += $GovEndpointAdd 
+            $Script:GovEndpoints += $GovEndpointAdd 
         }
         default {
-            $AdditionalEndpoints = $TempArray | Select-String -Pattern "^(?=.{1,255}$)[0-9A-Za-z](?:(?:[0-9A-Za-z]|-){0,61}[0-9A-Za-z])?(?:\.[0-9A-Za-z](?:(?:[0-9A-Za-z]|-){0,61}[0-9A-Za-z])?)*\.?$"
+            $AdditionalEndpoints = ($TempArray | Select-String -Pattern "^(?=.{1,255}$)[0-9A-Za-z](?:(?:[0-9A-Za-z]|-){0,61}[0-9A-Za-z])?(?:\.[0-9A-Za-z](?:(?:[0-9A-Za-z]|-){0,61}[0-9A-Za-z])?)*\.?$" ).Matches.Value
             $ComEndpointAdd = $AdditionalEndpoints | Select-Object -Unique
-            $CommercialEndpoints += $ComEndpointAdd 
+            $Script:CommercialEndpoints += $ComEndpointAdd             
         }
     }
      
