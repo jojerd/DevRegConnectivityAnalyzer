@@ -132,10 +132,11 @@ $Interface = $ConnectionInfo.InterfaceAlias
 $LocalIP = $ConnectionInfo.IPv4Address.IPAddress
 $DefaultGateway = $ConnectionInfo.IPv4DefaultGateway.NextHop
 $DNSServer = $ConnectionInfo.DNSServer.ServerAddresses
+$VPNCheck = Get-VpnConnection | Where-Object { $_.ConnectionStatus -ne "Disconnected"}
+$VPNName = $VPNCheck.Name
 #Get possible WAN IP Address (VPN or VPN with split tunnel, and or multiple WANs could provide false positive results)
 $WAN = Invoke-RestMethod -Method Get "https://checkip.azurewebsites.net"
 $WANIP = $WAN.html.body -split ":"
-
 
 Write-Log -String "Host Operating System: $($OS.caption)" -Name $Logname -OutHost
 Write-Log -string "Host Operating System Architecture: $($OS.OSArchitecture)" -Name $Logname -OutHost
@@ -146,6 +147,9 @@ Write-Log -String "Host IP Address: $LocalIP" -Name $Logname -OutHost
 Write-Log -String "Host Default Gateway IP: $DefaultGateway" -Name $Logname -OutHost
 Write-Log -String "Host Configured DNS server(s) $DNSServer" -Name $Logname -OutHost
 Write-Log -String "Host WAN IP:$($WANIP[1])" -Name $Logname -OutHost
+Write-Log -String "Host VPN connection status: $($VPNCheck.ConnectionStatus)" -Name $Logname -OutHost
+Write-Log -String "Host VPN Name: $VPNName" -Name $Logname -OutHost
+
 
 #Get local Firewall configuration information
 $PublicFirewall = Get-NetFirewallProfile -Name Public
@@ -308,8 +312,13 @@ function Get-TenantInfo {
             $TempArray += $TenantEndpointObjects[2]
         } 
     }
+    if ($HomeRealmDiscoveryInfo.NameSpaceType -eq "Federated"){
+        $FederationEndpoint = $HomeRealmDiscoveryInfo.AuthURL -split "/"
+        $TempArray += $FederationEndpoint[2]     
+    }
+
     # Switch to determine which tenant to add the tenant specific endpoints to. Regex pattern used to filter hostnames from other data.
-    Write-Log -String "Adding retrieve tenant specific endpoints to pre-defined endpoints" -Name $Logname -OutHost
+    Write-Log -String "Adding tenant specific endpoints to pre-defined endpoints" -Name $Logname -OutHost
     switch ($TenantCloud) {
         "USG" {
             $AdditionalEndpoints = ($TempArray | Select-String -Pattern "^(?=.{1,255}$)[0-9A-Za-z](?:(?:[0-9A-Za-z]|-){0,61}[0-9A-Za-z])?(?:\.[0-9A-Za-z](?:(?:[0-9A-Za-z]|-){0,61}[0-9A-Za-z])?)*\.?$" ).Matches.Value
