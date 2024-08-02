@@ -414,7 +414,7 @@ function Test-Connectivity {
                 Write-Log -String "Port 443 for $HashEndpoint IP Address $IPaddress is $PortStatus" -Name $Logname -OutHost
             }
             else {
-                # If connection failed log the endpoint name and IP Address and add both to hashtable for later retrieval.
+                # If connection failed log the endpoint name and IP Address.
                 $PortStatus = "Closed"
                 Write-Log -String "Connection Timeout for $HashEndpoint IP Address: $IPaddress" -Name $Logname -OutHost
                 $TCPClient.Close()
@@ -494,7 +494,7 @@ function Test-Connectivity {
 
             }
             else {
-                # If port is closed log it and detail which endpoint and IP Address script was unable to connect to.
+                # If port is closed log it and detail which endpoint and IP Address script was unable to connect to and add it to Hashtable to retrieva later.
                 Write-Log -String "Skipping diagnostics for $IPAddress as destination port is closed or unreachable" -Name $Logname -OutHost
                 Write-Host ""
                 Write-Host "Unable to connect to $IPaddress for $HashEndpoint over port 443 as it is either being blocked by a firewall / proxy or is unreachable" -ForegroundColor Red
