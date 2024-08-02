@@ -27,12 +27,12 @@ SOFTWARE.
 	Name: DevRegConnectAnalyzer.ps1
 	Requires: PowerShell 5.1
     Major Release History:
-        To Be Announced - Initial Release
+        8/2/2024- Initial Release
 
 .SYNOPSIS
 Automates the process for checking device registration and Windows Hello for Business connectivity to Entra. Its a best effort attempt to check everything from IP
 addresses resolved per hostname, and attempts to connect to each hostname IP returned over port 443 and will also attempt to provide the TLS version and connection information.
-This information is useful to help troubleshoot connectivity to various endpoints.
+This information is useful to help troubleshoot connectivity to various Microsoft Entra endpoints.
 
 .DESCRIPTION
 This utility will check connectivity and TLS encryption to the required endpoints to help provide insight into connectivity related issues with Device Registration
@@ -40,14 +40,12 @@ and Windows Hello for Business issues.
 
 
 .EXAMPLE
-Fill in later after script is completed.
+PowerShell as an Administrator: .\DevRegConnectAnalyzer.ps1
 
 #>
-#Requires -Version 5.1
+#Requires -RunAsAdministrator
 $Global:ProgressPreference = 'SilentlyContinue'
-#Log filename
 $Logname = 'DevRegConnectivity.log'
-
 # Special thanks to EE Matt Byrd for the Write-Log function
 function Write-Log {
     [cmdletbinding()]
@@ -88,10 +86,6 @@ function Write-Log {
         else { Write-Verbose  $logstring }
     }
 }
-# Retrieve device registration status information. 
-Write-log -String "Retrieving DSRegcmd /status information and logging to a separate log file" -Name $Logname
-$DSReg = dsregcmd.exe /Status
-$DSReg | Out-File .\dsregcmd.log
 
 # Endpoints used for Device Registration and Windows Hello for Business (commercial tenants)
 $CommercialEndpoints = 'login.microsoftonline.com', 'device.login.microsoftonline.com', 'enterpriseregistration.windows.net'
@@ -104,7 +98,41 @@ $GovWindowsHelloEndpoints = 'fp-afd.azurefd.us', 'account.live.com', 'acctcdn.ms
 # Hashtable used to store endpoints and retrieved IP addresses.
 $IPHashtable = @{}
 
-#Get Environmental data about the host system, user and domain.
+# Hashtable for adding IPs that were found with closed ports.
+$Portsclosed = @{}
+
+# Create a schedule task to run the Test Connectivity function under SYSTEM context.
+function Set-Task {
+    $Path = Get-Location
+    $FilePath = $Path.Path
+    $TaskName = 'DevRegConnectivity'
+    $Filedetails = "$($FilePath)\ServiceDevRegConAnalyzer.ps1"
+    $PowerShell = "Powershell -ExecutionPolicy Bypass -File "
+    $Output = $PowerShell + '"' + "$($Filedetails)" + '"'
+    $Output | Out-File .\run.bat -Encoding ascii
+    $Taskaction = New-ScheduledTaskAction -Execute "$($FilePath)\run.bat" -WorkingDirectory $($FilePath)
+    $Principal = New-ScheduledTaskPrincipal -UserId "NT AUTHORITY\SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+    Register-ScheduledTask $TaskName -Action $Taskaction -Principal $Principal
+
+
+    Start-ScheduledTask $TaskName
+    $Taskdetails = Get-ScheduledTask -TaskName $TaskName
+    Write-Log -string "Task Details: $Taskdetails" -Name $Logname -OutHost
+    Write-Log -string "Task status: $($TaskDetails.state)" -name $logname -OutHost
+
+    # Checking Scheduled task to make sure its running and to not remove it before its finished.
+    while (($Taskdetails | Get-ScheduledTaskInfo).LastTaskResult -eq 267009) {
+        Write-Log -String "Task $($TaskName) is currently running, going to sleep for 15 seconds" -Name $Logname -OutHost
+        Start-Sleep -Seconds 15
+    }
+    # Cleanup task scheduler and remove batch file.
+    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
+    Write-Host ""
+    Remove-Item .\run.bat
+    Write-Log -String "Script Completed, removed scheduled task from task scheduler" -Name $Logname -OutHost
+}
+
+# Get Environmental data about the host system, user and domain.
 Write-Log -String "Checking if machine is on-prem domain joined" -Name $Logname -OutHost
 try {
     $Domainjoined = [System.DirectoryServices.ActiveDirectory.Domain]::GetComputerDomain()
@@ -132,11 +160,13 @@ $Interface = $ConnectionInfo.InterfaceAlias
 $LocalIP = $ConnectionInfo.IPv4Address.IPAddress
 $DefaultGateway = $ConnectionInfo.IPv4DefaultGateway.NextHop
 $DNSServer = $ConnectionInfo.DNSServer.ServerAddresses
-$VPNCheck = Get-VpnConnection | Where-Object { $_.ConnectionStatus -ne "Disconnected"}
+$VPNCheck = Get-VpnConnection | Where-Object { $_.ConnectionStatus -ne "Disconnected" }
 $VPNName = $VPNCheck.Name
 #Get possible WAN IP Address (VPN or VPN with split tunnel, and or multiple WANs could provide false positive results)
-$WAN = Invoke-RestMethod -Method Get "https://checkip.azurewebsites.net"
-$WANIP = $WAN.html.body -split ":"
+#$WAN = Invoke-RestMethod -Method Get "https://checkip.azurewebsites.net"
+#$WANIP = $WAN.html.body -split ":"
+$WAN = Invoke-RestMethod -Method Get https://checkip.info/json
+$WANIP = $WAN.IP
 
 Write-Log -String "Host Operating System: $($OS.caption)" -Name $Logname -OutHost
 Write-Log -string "Host Operating System Architecture: $($OS.OSArchitecture)" -Name $Logname -OutHost
@@ -146,7 +176,12 @@ Write-Log -string "Host connected interface: $Interface" -Name $Logname -OutHost
 Write-Log -String "Host IP Address: $LocalIP" -Name $Logname -OutHost
 Write-Log -String "Host Default Gateway IP: $DefaultGateway" -Name $Logname -OutHost
 Write-Log -String "Host Configured DNS server(s) $DNSServer" -Name $Logname -OutHost
-Write-Log -String "Host WAN IP:$($WANIP[1])" -Name $Logname -OutHost
+Write-Log -String "Host WAN IP: $WANIP" -Name $Logname -OutHost
+Write-Log -String "WAN Hostname: $($WAN.hostname)" -Name $Logname -OutHost
+Write-Log -String "WAN City: $($WAN.city)" -Name $Logname -OutHost
+Write-Log -String "WAN Region: $($WAN.region)" -Name $Logname -OutHost
+Write-Log -String "WAN Country: $($WAN.country)" -Name $Logname -OutHost
+Write-Log -String "WAN ASN: $($WAN.asn)" -Name $Logname -OutHost
 Write-Log -String "Host VPN connection status: $($VPNCheck.ConnectionStatus)" -Name $Logname -OutHost
 Write-Log -String "Host VPN Name: $VPNName" -Name $Logname -OutHost
 
@@ -159,6 +194,11 @@ $DomainFirewall = Get-NetFirewallProfile -Name Domain
 Write-Log -String "Public Firewall Enabled: $($PublicFirewall.Enabled)" -Name $Logname -OutHost
 Write-Log -String "Pirvate Firewall Enabled: $($PrivateFirewall.Enabled)" -Name $Logname -OutHost
 Write-Log -String "Domain Firewall Enabled: $($DomainFirewall.Enabled)" -Name $Logname -OutHost
+
+# Retrieve device registration status information. 
+Write-log -String "Retrieving DSRegcmd /status information and logging to a separate log file" -Name $Logname
+$DSReg = dsregcmd.exe /Status
+$DSReg | Out-File .\dsregcmd.log
 
 # Retrieve USGov endpoint DNS records.
 function Get-USGov {
@@ -273,6 +313,7 @@ function Get-Commercial {
     }
     # Write to log that the function completed and inform which function is next.
     Write-Log -String "Completed function Get-Commercial, calling next fuction to test Connectivity" -Name $Logname; Test-Connectivity
+
 }
 
 # Function to retrieve tenant details
@@ -312,7 +353,7 @@ function Get-TenantInfo {
             $TempArray += $TenantEndpointObjects[2]
         } 
     }
-    if ($HomeRealmDiscoveryInfo.NameSpaceType -eq "Federated"){
+    if ($HomeRealmDiscoveryInfo.NameSpaceType -eq "Federated") {
         $FederationEndpoint = $HomeRealmDiscoveryInfo.AuthURL -split "/"
         $TempArray += $FederationEndpoint[2]     
     }
@@ -348,6 +389,9 @@ function Get-TenantInfo {
 }
 
 function Test-Connectivity {
+    $Json = $IPHashtable | ConvertTo-Json
+    $path = Get-Location
+    $Json | Out-File -FilePath $path\IPs.json | Out-Null
     # Specify protocols we are going to use to test with to confirm TLS is not being interfered with (Only testing with TLS 1.2 and TLS 1.3).
     $Protocols = [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12, [Net.SecurityProtocolType]::Tls13
     $ProtocolArray = $Protocols -split ","
@@ -370,7 +414,7 @@ function Test-Connectivity {
                 Write-Log -String "Port 443 for $HashEndpoint IP Address $IPaddress is $PortStatus" -Name $Logname -OutHost
             }
             else {
-                # If connection failed log the endpoint name and IP Address.
+                # If connection failed log the endpoint name and IP Address and add both to hashtable for later retrieval.
                 $PortStatus = "Closed"
                 Write-Log -String "Connection Timeout for $HashEndpoint IP Address: $IPaddress" -Name $Logname -OutHost
                 $TCPClient.Close()
@@ -409,7 +453,7 @@ function Test-Connectivity {
                             ProtocolSupported    = $ProtocolStatus
                         
                         }
-                        # Itinerate through the PS Custom Object and write details retrieved from TLS Connection above to log file.
+                        # Iterate through the PS Custom Object and write details retrieved from TLS Connection above to log file.
                         foreach ($object in $ConnectedReport) {
                             Write-Log -String "+++++++++++++++++++++++++++++++++++ CERTIFICATE DETAILS +++++++++++++++++++++++++++++++++++++++++++++" -Name $Logname -OutHost
                             foreach ($i in $object.PSObject.Properties) {
@@ -443,7 +487,7 @@ function Test-Connectivity {
                             Write-Log -String "+++++++++++++++++++++++++++++++++++ TLS FAILURE DETAILS +++++++++++++++++++++++++++++++++++++++++++++" -Name $Logname -OutHost
                         }
                     }
-                    # Close the current connection to create a new one.
+                    # Close the current connection.
                     $SocketClient.Dispose()
                     $SecureChannel.Dispose()
                 }
@@ -455,15 +499,29 @@ function Test-Connectivity {
                 Write-Host ""
                 Write-Host "Unable to connect to $IPaddress for $HashEndpoint over port 443 as it is either being blocked by a firewall / proxy or is unreachable" -ForegroundColor Red
                 $TCPClient.Close()
-
+                if ($Portsclosed.Contains($HashEndpoint -eq $false)) {
+                    $Portsclosed.$HashEndpoint = @()
+                    $Portsclosed.Add($HashEndpoint, "$IPaddress,")
+                }
+                else {
+                    $Portsclosed.$HashEndpoint += "$IPaddress,"
+                }             
             }
         }
     }
     # Notify that script has completed.
-    Write-Log -String "Script completed testing connectivity" -Name $Logname
+    Write-Log -String "Script completed testing connectivity for user context" -Name $Logname
     Write-Host ""
-    Write-Host "Script Completed and details logged" -ForegroundColor Yellow
+    Write-Host "Script Completed under User Context, creating Scheduled Task to run a SYSTEM context check" -ForegroundColor Yellow
     Write-Host ""
-   
+    # Log IPs that were unreachable over port 443 for easier review.
+    foreach ($item in $Portsclosed.Keys) {
+        Write-Log -String "$item IP's Port 443 detected closed:" -Name $Logname -OutHost
+        foreach ($obj in $Portsclosed[$item].trimend(",").split(",")) {
+            Write-log -String "IP: $obj" -Name $Logname -OutHost
+        }
+    }
+
+    Set-Task
 }
 Get-TenantInfo
