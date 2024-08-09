@@ -27,7 +27,8 @@ SOFTWARE.
 	Name: DevRegConnectAnalyzer.ps1
 	Requires: PowerShell 5.1
     Major Release History:
-        8/2/2024- Initial Release
+        8/2/2024- 1.0 Initial Release
+        8/9/2024- 1.01 Added error handling for connection attempts.
 
 .SYNOPSIS
 Automates the process for checking device registration and Windows Hello for Business connectivity to Entra. Its a best effort attempt to check everything from IP
@@ -405,8 +406,14 @@ function Test-Connectivity {
             Write-Log -String " " -Name $Logname -OutHost
             Write-Log -String "Checking IP Address: $IPaddress" -Name $Logname -OutHost
             # Build the TCP Client to make the connection to IP and Port.
-            $TCPClient = New-Object System.Net.Sockets.TcpClient
-            $Portcheck = $TCPClient.ConnectAsync($IPaddress, $Port).Wait($Timeout)
+            try {
+                $TCPClient = New-Object System.Net.Sockets.TcpClient
+                $Portcheck = $TCPClient.ConnectAsync($IPaddress, $Port).Wait($Timeout)
+            }
+            catch {
+                Write-Log -String "$($_.Exception.Message)" -Name $Logname -OutHost
+            }
+
             # If connection is successful create a new variable with the port status and log it.
             if ($Portcheck -eq 'True') {
                 $PortStatus = "Open"
@@ -423,8 +430,14 @@ function Test-Connectivity {
             if ($PortStatus -eq 'Open') {
                 foreach ($Protocol in $ProtocolArray) {
                     # Build a new client to check TLS connectivity.
-                    $SocketClient = New-Object System.Net.Sockets.Socket([System.Net.Sockets.SocketType]::Stream, [System.Net.Sockets.ProtocolType]::Tcp)
-                    $SocketClient.Connect($IPAddress, $Port)
+                    try {
+                        $SocketClient = New-Object System.Net.Sockets.Socket([System.Net.Sockets.SocketType]::Stream, [System.Net.Sockets.ProtocolType]::Tcp)
+                        $SocketClient.Connect($IPAddress, $Port)
+                    }
+                    catch {
+                        Write-Log -String "$($_.Exception.Message)" -Name $Logname -OutHost
+                    }
+                    
                     try {
                         # Retrieve connection details to be able to log them (Remote Certificate, Cipher used, Protocol connected etc.)
                         $Stream = New-Object System.Net.Sockets.NetworkStream($SocketClient, $true)
