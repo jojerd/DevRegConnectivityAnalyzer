@@ -131,6 +131,9 @@ function Set-Task {
     Write-Host ""
     Remove-Item .\run.bat
     Write-Log -String "Script Completed, removed scheduled task from task scheduler" -Name $Logname -OutHost
+
+    # Add generated logs to an archive file.
+    Get-ChildItem -Path $FilePath | Where-Object {($_.Extension -like "*.log") -or ($_.Extension -like "*.json")} | Compress-Archive -DestinationPath "$($FilePath)\DevRegLogs.zip" -Update
 }
 
 # Get Environmental data about the host system, user and domain.
@@ -166,7 +169,14 @@ $VPNName = $VPNCheck.Name
 #Get possible WAN IP Address (VPN or VPN with split tunnel, and or multiple WANs could provide false positive results)
 #$WAN = Invoke-RestMethod -Method Get "https://checkip.azurewebsites.net"
 #$WANIP = $WAN.html.body -split ":"
-$WAN = Invoke-RestMethod -Method Get https://checkip.info/json
+try {
+    $WAN = Invoke-RestMethod -Method Get https://checkip.info/json
+}
+catch {
+    Write-Log -String "Exception encountered $($_.Exception.Message)" -Name $Logname -OutHost
+    Write-Error "Encountered an exception attempting to retrieve WAN IP information see log for details" -ErrorAction Continue
+}
+
 $WANIP = $WAN.IP
 
 Write-Log -String "Host Operating System: $($OS.caption)" -Name $Logname -OutHost
@@ -326,7 +336,13 @@ function Get-TenantInfo {
     Write-Log -String "Retrieving Tenant Information..." -Name $Logname -OutHost
     # Checking the openid-configuration to pull information from.
     $url = "https://login.windows.net/$TenantDomain/.well-known/openid-configuration"
-    $TenantInfo = Invoke-RestMethod -Method Get -Uri $url
+    try {
+        $TenantInfo = Invoke-RestMethod -Method Get -Uri $url -TimeoutSec 10
+    }
+    catch {
+        Write-Log -String "$($_.Exception.Message)" -Name $Logname -OutHost
+        Write-Error "Encountered an exception attempting to retrieve tenant information, see log for details" -ErrorAction Stop
+    }
     $TenantIDInfo = ($TenantInfo.authorization_endpoint).split("/")
     $TenantID = $TenantIDInfo[3]
     $CloudInstance = $TenantInfo.cloud_instance_name
@@ -337,7 +353,13 @@ function Get-TenantInfo {
     #===========================================================================================
     # Checking the get user realm endpoint to get home realm related information. 
     $HRDUrl = "https://login.microsoftonline.com/getuserrealm.srf?json=1&login=$TenantDomain"
-    $HomeRealmDiscoveryInfo = Invoke-RestMethod -Method Get -Uri $HRDUrl
+    try {
+        $HomeRealmDiscoveryInfo = Invoke-RestMethod -Method Get -Uri $HRDUrl -TimeoutSec 10
+    }
+    catch {
+        Write-Log -String "$($_.Exception.Message)" -Name $Logname -OutHost
+        Write-Error "Encountered an exception attempting to retrieve tenant information, see log for details" -ErrorAction Stop
+    }
     $DomainAuth = $HomeRealmDiscoveryInfo.NameSpaceType
     $IDP = $HomeRealmDiscoveryInfo.AuthURL
     Write-Log -String "Domain Authentication Type: $DomainAuth" -Name $Logname -OutHost

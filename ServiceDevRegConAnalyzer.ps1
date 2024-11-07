@@ -94,9 +94,9 @@ function Write-Log {
         else { Write-Verbose  $logstring }
     }
 }
-$WhoCheck = whoami.exe
-Write-Log -String "$($WhoCheck) account is running this script" -Name $Logname -OutHost
-
+$WhoCheck = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+Write-Log -String "$($WhoCheck.Name) account is running this script" -Name $Logname -OutHost
+Write-Log -String "Is System: $($WhoCheck.IsSystem)" -Name $Logname -OutHost
 function Test-Connectivity {
     # Specify protocols we are going to use to test with to confirm TLS is not being interfered with (Only testing with TLS 1.2 and TLS 1.3).
     $Protocols = [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12, [Net.SecurityProtocolType]::Tls13
