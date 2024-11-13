@@ -133,7 +133,7 @@ function Set-Task {
     Write-Log -String "Script Completed, removed scheduled task from task scheduler" -Name $Logname -OutHost
 
     # Add generated logs to an archive file.
-    Get-ChildItem -Path $FilePath | Where-Object {($_.Extension -like "*.log") -or ($_.Extension -like "*.json")} | Compress-Archive -DestinationPath "$($FilePath)\DevRegLogs.zip" -Update
+    Get-ChildItem -Path $FilePath | Where-Object { ($_.Extension -like "*.log") -or ($_.Extension -like "*.json") } | Compress-Archive -DestinationPath "$($FilePath)\DevRegLogs.zip" -Update
 }
 
 # Get Environmental data about the host system, user and domain.
@@ -341,7 +341,17 @@ function Get-TenantInfo {
     }
     catch {
         Write-Log -String "$($_.Exception.Message)" -Name $Logname -OutHost
-        Write-Error "Encountered an exception attempting to retrieve tenant information, see log for details" -ErrorAction Stop
+        Write-Log -String "Trying alternative method to retrieve Tenant details. Prompting user for domain..." -Name $Logname -OutHost
+        try {
+            $TenantDomain = Read-Host -Prompt "Enter Entra domain. Example - YourDomain.onmicrosoft.com"
+            $url = "https://login.windows.net/$TenantDomain/.well-known/openid-configuration"
+            $TenantInfo = Invoke-RestMethod -Method Get -Uri $url -TimeoutSec 10
+        }
+        catch {
+            Write-Log -String "$($_.Exception.Message)" -Name $Logname -OutHost
+            Write-Error "Encountered an exception attempting to retrieve tenant information, see log for details" -ErrorAction Stop
+        }
+        
     }
     $TenantIDInfo = ($TenantInfo.authorization_endpoint).split("/")
     $TenantID = $TenantIDInfo[3]
