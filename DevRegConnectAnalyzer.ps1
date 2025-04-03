@@ -29,6 +29,7 @@ SOFTWARE.
     Major Release History:
         8/2/2024- 1.0 Initial Release
         8/9/2024- 1.01 Added error handling for connection attempts.
+        11/13/2024 - 1.05 Additional features and error handling.
 
 .SYNOPSIS
 Automates the process for checking device registration and Windows Hello for Business connectivity to Entra. Its a best effort attempt to check everything from IP
@@ -173,7 +174,7 @@ try {
     $WAN = Invoke-RestMethod -Method Get https://checkip.info/json
 }
 catch {
-    Write-Log -String "Exception encountered $($_.Exception.Message)" -Name $Logname -OutHost
+    Write-Log -String "Exception encountered: $($_.Exception.Message)" -Name $Logname -OutHost
     Write-Error "Encountered an exception attempting to retrieve WAN IP information see log for details" -ErrorAction Continue
 }
 
@@ -210,6 +211,8 @@ Write-Log -String "Domain Firewall Enabled: $($DomainFirewall.Enabled)" -Name $L
 Write-log -String "Retrieving DSRegcmd /status information and logging to a separate log file" -Name $Logname
 $DSReg = dsregcmd.exe /Status
 $DSReg | Out-File .\dsregcmd.log
+$IPconfig = ipconfig.exe /all
+$IPconfig | Out-File .\IPconfig.log
 
 # Retrieve USGov endpoint DNS records.
 function Get-USGov {
