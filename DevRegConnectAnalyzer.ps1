@@ -30,6 +30,7 @@ SOFTWARE.
         8/2/2024- 1.0 Initial Release
         8/9/2024- 1.01 Added error handling for connection attempts.
         11/13/2024 - 1.05 Additional features and error handling.
+        4/15/2025 - 1.06 Added better timeout exception handling to help prevent script from hanging when encountering unreachable destinations.
 
 .SYNOPSIS
 Automates the process for checking device registration and Windows Hello for Business connectivity to Entra. Its a best effort attempt to check everything from IP
@@ -168,10 +169,20 @@ $DNSServer = $ConnectionInfo.DNSServer.ServerAddresses
 $VPNCheck = Get-VpnConnection | Where-Object { $_.ConnectionStatus -ne "Disconnected" }
 $VPNName = $VPNCheck.Name
 #Get possible WAN IP Address (VPN or VPN with split tunnel, and or multiple WANs could provide false positive results)
-#$WAN = Invoke-RestMethod -Method Get "https://checkip.azurewebsites.net"
-#$WANIP = $WAN.html.body -split ":"
+#try {
+    #$WAN = Invoke-RestMethod -Method Get "https://checkip.azurewebsites.net"
+    #$WANIP = $WAN.html.body -split ":"
+#}
+#catch {
+    #Write-Log -String "Exception encountered: $($_.Exception.Message)" -Name $Logname -OutHost
+    #Write-Error "Encountered an exception attempting to retrieve WAN IP information see log for details" -ErrorAction Continue
+#}
+
 try {
-    $WAN = Invoke-RestMethod -Method Get https://checkip.info/json
+    $WAN = Invoke-RestMethod -Method Get https://checkip.info/json -TimeoutSec 10
+}
+catch [System.TimeoutException] {
+    Write-Log -String "Timeout exception attempting to retrieve WAN IP information" -Name $Logname -OutHost
 }
 catch {
     Write-Log -String "Exception encountered: $($_.Exception.Message)" -Name $Logname -OutHost
@@ -350,6 +361,8 @@ function Get-TenantInfo {
             $url = "https://login.windows.net/$TenantDomain/.well-known/openid-configuration"
             $TenantInfo = Invoke-RestMethod -Method Get -Uri $url -TimeoutSec 10
         }
+        catch [System.TimeoutException]
+        { Write-Log -String "Timed out retrieving Tenant details, Check and make sure that login.windows.net is reachable" -Name $Logname -OutHost }
         catch {
             Write-Log -String "$($_.Exception.Message)" -Name $Logname -OutHost
             Write-Error "Encountered an exception attempting to retrieve tenant information, see log for details" -ErrorAction Stop
