@@ -382,6 +382,11 @@ function Get-TenantInfo {
     try {
         $HomeRealmDiscoveryInfo = Invoke-RestMethod -Method Get -Uri $HRDUrl -TimeoutSec 10
     }
+    catch [System.TimeoutException]{
+        Write-Log -String "Timed out attempting home realm discovery" -Name $Logname -OutHost
+        Write-Log -String "Ensure that login.microsoftonline.com is reachable" -Name $Logname -OutHost
+        Write-Error "Encountered a timeout exception attempting Home Realm Discovery, see log for details" -ErrorAction Stop
+    }
     catch {
         Write-Log -String "$($_.Exception.Message)" -Name $Logname -OutHost
         Write-Error "Encountered an exception attempting to retrieve tenant information, see log for details" -ErrorAction Stop
@@ -457,6 +462,9 @@ function Test-Connectivity {
             try {
                 $TCPClient = New-Object System.Net.Sockets.TcpClient
                 $Portcheck = $TCPClient.ConnectAsync($IPaddress, $Port).Wait($Timeout)
+            }
+            catch [System.TimeoutException] {
+                Write-Log -String "Timed out attempting to connect to $HashEndpoint IP Address $IPaddress" -Name $Logname -OutHost
             }
             catch {
                 Write-Log -String "$($_.Exception.Message)" -Name $Logname -OutHost
