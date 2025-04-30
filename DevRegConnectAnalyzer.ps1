@@ -144,10 +144,13 @@ function Set-Task {
 
 # Check for other script, and stop if not found.
 if (-not (Test-Path -Path .\ServiceDevRegConAnalyzer.ps1)) {
-    Write-Log "Required component script not found, please make sure you are running this script from the same directory as ServiceDevRegConAnalyzer.ps1" -Name $Logname -OutHost
-    Write-Log "Exiting script..." -Name $Logname -OutHost
+    Write-Log -String "Required component script not found, please make sure you are running this script from the same directory as ServiceDevRegConAnalyzer.ps1" -Name $Logname -OutHost
+    Write-Log -String "Exiting script..." -Name $Logname -OutHost
     Write-Error "Please run script from the same directory as ServiceDevRegConAnalyzer.ps1" -ErrorAction Stop
     exit
+}
+else {
+    Write-Log -String "Required component script found, continuing..." -Name $Logname -OutHost
 }
 
 # Get Environmental data about the host system, user and domain.
