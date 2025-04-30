@@ -355,8 +355,6 @@ function Get-TenantInfo {
     try {
         $TenantInfo = Invoke-RestMethod -Method Get -Uri $url -TimeoutSec 10
     }
-    catch [System.TimeoutException]
-    { Write-Log -String "Timed out retrieving Tenant details, Check and make sure that login.windows.net is reachable" -Name $Logname -OutHost }
     catch {
         Write-Log -String "$($_.Exception.Message)" -Name $Logname -OutHost
         Write-Log -String "Trying alternative method to retrieve Tenant details. Prompting user for domain..." -Name $Logname -OutHost
