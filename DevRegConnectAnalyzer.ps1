@@ -32,6 +32,8 @@ SOFTWARE.
         11/13/2024 - 1.05 Additional features and error handling.
         4/15/2025 - 1.06 Added better timeout exception handling to help prevent script from hanging when encountering unreachable destinations.
         4/25/2025 - 1.07 Added additional error handling for connection attempts and added additional endpoint for commercial tenants.
+        4/30/2025 - 1.08 Removed a bad timeout exception catch block that was causing the script to fail when it should have continued. 
+                    Added a check for a required component script to be present in the same directory as this script.
 
 .SYNOPSIS
 Automates the process for checking device registration and Windows Hello for Business connectivity to Entra. Its a best effort attempt to check everything from IP
@@ -138,6 +140,14 @@ function Set-Task {
 
     # Add generated logs to an archive file.
     Get-ChildItem -Path $FilePath | Where-Object { ($_.Extension -like "*.log") -or ($_.Extension -like "*.json") } | Compress-Archive -DestinationPath "$($FilePath)\DevRegLogs.zip" -Update
+}
+
+# Check for other script, and stop if not found.
+if (-not (Test-Path -Path .\ServiceDevRegConAnalyzer.ps1)) {
+    Write-Log "Required component script not found, please make sure you are running this script from the same directory as ServiceDevRegConAnalyzer.ps1" -Name $Logname -OutHost
+    Write-Log "Exiting script..." -Name $Logname -OutHost
+    Write-Error "Please run script from the same directory as ServiceDevRegConAnalyzer.ps1" -ErrorAction Stop
+    exit
 }
 
 # Get Environmental data about the host system, user and domain.
